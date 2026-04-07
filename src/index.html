@@ -239,6 +239,7 @@
   <div class="sb-item">✅ Başarılı: <span id="sb-ok">0</span></div>
   <div class="sb-item">❌ Hatalı: <span id="sb-fault">0</span></div>
   <div class="sb-item" style="margin-left:auto">OEE: <span id="sb-oee">—</span></div>
+  <div class="sb-item"><span class="sb-dot red" id="opcua-dot"></span><span id="opcua-label">OPC UA: Kapalı</span></div>
 </div>
 
 <!-- CONTEXT MENU -->
@@ -251,6 +252,114 @@
   <div class="ctx-item danger" onclick="ctxDelete()">🗑 Sil</div>
 </div>
 
+<script src="ladder.js"></script>
 <script src="sim.js"></script>
 </body>
 </html>
+
+<!-- LADDER PANEL CSS -->
+<style>
+#ladder-panel { display:flex; flex-direction:column; background:var(--bg1); border-top:1px solid var(--border); height:320px; flex-shrink:0; }
+#ladder-tabs { display:flex; border-bottom:1px solid var(--border); }
+.l-tab { padding:6px 14px; font-size:11px; font-weight:600; cursor:pointer; color:var(--text3); border-bottom:2px solid transparent; }
+.l-tab.active { color:var(--blue); border-bottom-color:var(--blue); }
+#ladder-body { display:flex; flex:1; overflow:hidden; }
+#ladder-left { display:flex; flex-direction:column; flex:1; overflow:hidden; }
+#ladder-toolbar { display:flex; align-items:center; gap:4px; padding:5px 8px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.lb { padding:4px 8px; font-size:11px; font-weight:500; border:1px solid var(--border2); border-radius:5px; cursor:pointer; background:var(--bg2); color:var(--text2); font-family:monospace; }
+.lb:hover { background:var(--bg3); color:var(--text); }
+.run-btn { background:#065f46; color:#6ee7b7; border-color:#10b981; }
+.run-btn.running { background:#7f1d1d; color:#fca5a5; border-color:#ef4444; }
+.lsep { width:1px; height:20px; background:var(--border); margin:0 2px; }
+.lcat { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; }
+#ladder-rungs { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px; }
+.ladder-empty { text-align:center; color:var(--text3); font-size:12px; padding:24px; }
+.ladder-rung { border:1px solid var(--border); border-radius:8px; background:var(--bg2); cursor:pointer; transition:border-color .15s; }
+.ladder-rung.selected { border-color:var(--blue); }
+.ladder-rung.rung-active { border-color:var(--green); background:#065f4620; }
+.rung-header { display:flex; align-items:center; justify-content:space-between; padding:4px 10px; border-bottom:1px solid var(--border); }
+.rung-comment { font-size:11px; color:var(--text3); }
+.rung-del { cursor:pointer; font-size:12px; color:var(--text3); }
+.rung-del:hover { color:var(--red); }
+.rung-body { display:flex; align-items:center; padding:8px 6px; gap:0; min-height:52px; }
+.rung-power { width:8px; height:40px; background:var(--border); border-radius:2px; flex-shrink:0; }
+.rung-power.power-on { background:var(--green); box-shadow:0 0 6px #10b98160; }
+.rung-elements { display:flex; align-items:center; flex:1; gap:0; }
+.rung-el { display:flex; flex-direction:column; align-items:center; position:relative; padding:0 4px; }
+.el-wire { height:2px; background:var(--border); width:100%; position:absolute; top:50%; transform:translateY(-50%); }
+.el-wire.long { width:30px; }
+.el-body { font-family:monospace; font-size:14px; font-weight:700; color:var(--text3); z-index:1; background:var(--bg2); padding:2px; position:relative; }
+.rung-el.el-active .el-body { color:var(--green); }
+.el-tag { font-size:9px; color:var(--text3); margin-top:2px; white-space:nowrap; }
+.el-val { font-size:9px; font-weight:700; color:var(--text3); }
+.rung-el.el-active .el-val { color:var(--green); }
+.el-del { position:absolute; top:-6px; right:-2px; font-size:10px; color:var(--text3); cursor:pointer; z-index:2; }
+.el-del:hover { color:var(--red); }
+.el-preset { font-size:9px; color:var(--amber); margin-top:1px; }
+.rung-coil { display:flex; flex-direction:column; align-items:center; padding:0 6px; }
+.rung-coil .el-wire { width:30px; }
+.rung-coil-empty { font-size:10px; color:var(--text3); cursor:pointer; padding:6px; border:1px dashed var(--border); border-radius:4px; margin-left:8px; }
+.rung-coil-empty:hover { border-color:var(--blue); color:var(--blue); }
+.rung-add-hint { font-size:10px; color:var(--text3); padding:6px; }
+
+/* Tag Monitor */
+#tag-monitor-panel { width:180px; border-left:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+.tm-header { padding:5px 10px; font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+#tag-monitor { flex:1; overflow-y:auto; padding:4px; }
+.tag-row { display:flex; align-items:center; gap:5px; padding:3px 5px; border-radius:4px; font-size:11px; }
+.tag-row:hover { background:var(--bg3); }
+.tag-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.tag-dot.on { background:var(--green); }
+.tag-dot.off { background:var(--border2); }
+.tag-name { flex:1; color:var(--text2); font-family:monospace; font-size:10px; }
+.tag-val { font-weight:700; font-size:11px; color:var(--text); min-width:12px; }
+.tag-force { font-size:9px; padding:1px 4px; border:1px solid var(--border); border-radius:3px; cursor:pointer; background:var(--bg3); color:var(--text3); margin-left:2px; }
+.tag-force:hover { border-color:var(--amber); color:var(--amber); }
+
+/* Modal */
+#ladder-modal { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.6); z-index:9999; display:none; align-items:center; justify-content:center; }
+.modal-box { background:var(--bg2); border:1px solid var(--border2); border-radius:10px; padding:16px; min-width:280px; }
+.modal-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px; }
+.modal-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.tag-btn { padding:5px 10px; border:1px solid var(--border2); border-radius:5px; cursor:pointer; background:var(--bg3); color:var(--text); font-size:12px; font-family:monospace; }
+.tag-btn:hover { border-color:var(--blue); color:var(--blue); }
+.modal-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; color:var(--text2); }
+.modal-actions { display:flex; gap:8px; }
+</style>
+
+<!-- LADDER PANEL HTML -->
+<div id="ladder-panel">
+  <div id="ladder-tabs">
+    <div class="l-tab active" onclick="showTab('ladder')">🔧 Ladder Logic Editörü</div>
+    <div class="l-tab" onclick="showTab('monitor')">📊 Tag Monitor</div>
+    <button class="lb" style="margin-left:auto;margin:4px 8px" onclick="ladderEditor.loadExample()">📋 Örnek Yükle</button>
+    <button class="lb" style="margin:4px 4px" onclick="saveLadder()">💾 Kaydet</button>
+    <button class="lb" style="margin:4px 8px 4px 0" onclick="loadLadder()">📂 Aç</button>
+  </div>
+  <div id="ladder-body">
+    <div id="ladder-left">
+      <div id="ladder-toolbar"></div>
+      <div id="ladder-rungs"></div>
+    </div>
+    <div id="tag-monitor-panel">
+      <div class="tm-header">Tag Monitor <span style="cursor:pointer;color:var(--blue)" onclick="ladderEditor.renderTagMonitor()">↺</span></div>
+      <div id="tag-monitor"></div>
+    </div>
+  </div>
+</div>
+<div id="ladder-modal"></div>
+
+<script>
+function showTab(tab) {
+  document.querySelectorAll('.l-tab').forEach((t,i) => t.classList.toggle('active', i === (tab==='ladder'?0:1)));
+}
+function saveLadder() {
+  const { ipcRenderer } = require('electron');
+  const json = ladderEditor.getJSON();
+  ipcRenderer.send('save-ladder', json);
+}
+function loadLadder() {
+  const { ipcRenderer } = require('electron');
+  ipcRenderer.send('load-ladder');
+}
+</script>

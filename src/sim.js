@@ -905,3 +905,72 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 log('FactoryIO Simülatör hazır — komponent ekle ve başlat!', 'ok');
+
+// ============================================================
+// OPC UA ENTEGRASYONU
+// ============================================================
+const opcuaTags = {
+  Sensor_S1: false, Sensor_S2: false, Sensor_S3: false,
+  Motor_M1: false, Piston_A1: false, Fault_Lamp: false,
+};
+
+// OPC UA server hazır olduğunda
+ipcRenderer.on('opcua-ready', (e, ok) => {
+  const dot = document.getElementById('opcua-dot');
+  const lbl = document.getElementById('opcua-label');
+  if (dot) dot.className = 'sb-dot ' + (ok ? 'green' : 'red');
+  if (lbl) lbl.textContent = ok ? 'OPC UA: opc.tcp://localhost:4840' : 'OPC UA: Kapalı';
+  log(ok ? '[OPC UA] TIA Portal bağlantısına hazır ✓' : '[OPC UA] node-opcua yüklü değil — npm install gerekli', ok ? 'ok' : 'warn');
+});
+
+// TIA Portal bir tag yazdığında (Motor_M1, Piston_A1 vs.)
+ipcRenderer.on('opcua-tag-write', (e, { tag, val }) => {
+  opcuaTags[tag] = val;
+  log(`[OPC UA ←TIA] ${tag} = ${val}`, 'ok');
+
+  // Konveyörleri motor tag'ine göre güncelle
+  if (tag === 'Motor_M1') {
+    state.components.filter(c => c.type.startsWith('conveyor')).forEach(c => {
+      c.props.aktif = val;
+    });
+  }
+  // Pistonu güncelle
+  if (tag === 'Piston_A1') {
+    state.components.filter(c => c.type === 'actuator-piston').forEach(c => {
+      c.simState.active = val;
+    });
+  }
+  // Arıza lambası
+  if (tag === 'Fault_Lamp' && val) {
+    injectFault();
+  }
+});
+
+// Sensör tetiklenince OPC UA server'a bildir → TIA Portal okur
+function sendSensorToOpcUa(sensorId, value) {
+  const tagName = 'Sensor_' + sensorId;
+  if (opcuaTags[tagName] === value) return;
+  opcuaTags[tagName] = value;
+  ipcRenderer.send('opcua-update-tag', { tag: tagName, val: value });
+}
+
+// updateSensors fonksiyonunu OPC UA ile güçlendir
+const _origUpdateSensors = updateSensors;
+// Sensör değişimlerini OPC UA'ya da yansıt
+const _opcuaSensorPatch = setInterval(() => {
+  state.components.forEach(sensor => {
+    if (!sensor.type.startsWith('sensor')) return;
+    const id = sensor.props.id;
+    if (!id) return;
+    const tagName = 'Sensor_' + id;
+    if (opcuaTags[tagName] !== undefined) {
+      const val = sensor.simState?.active || false;
+      if (opcuaTags[tagName] !== val) {
+        sendSensorToOpcUa(id, val);
+      }
+    }
+  });
+}, 100);
+ipcRenderer.on('ladder-loaded', (e, json) => {
+  if (typeof ladderEditor !== 'undefined') ladderEditor.loadJSON(json);
+});
