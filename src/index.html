@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>FactoryIO Simülatör</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg0: #0f1117; --bg1: #161b27; --bg2: #1e2535; --bg3: #252d3f;
+    --border: #2e3a52; --border2: #3d4f6e;
+    --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+    --green: #10b981; --green2: #065f46; --green3: #d1fae5;
+    --blue: #3b82f6; --blue2: #1e3a8a; --blue3: #dbeafe;
+    --amber: #f59e0b; --amber2: #78350f; --amber3: #fef3c7;
+    --red: #ef4444; --red2: #7f1d1d; --red3: #fee2e2;
+    --purple: #8b5cf6; --purple2: #3b0764; --purple3: #ede9fe;
+    --cyan: #06b6d4; --r: 8px;
+    --sidebar-w: 220px; --props-w: 260px; --toolbar-h: 48px; --status-h: 28px;
+  }
+  body { background: var(--bg0); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; overflow: hidden; height: 100vh; display: flex; flex-direction: column; user-select: none; }
+
+  /* TOOLBAR */
+  #toolbar { height: var(--toolbar-h); background: var(--bg1); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; padding: 0 12px; flex-shrink: 0; }
+  .tb-title { font-size: 15px; font-weight: 600; color: var(--text); margin-right: 8px; letter-spacing: -0.3px; }
+  .tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+  .tb-btn { padding: 5px 12px; border: 1px solid var(--border2); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; background: var(--bg2); color: var(--text2); transition: all .15s; display: flex; align-items: center; gap: 5px; }
+  .tb-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--blue); }
+  .tb-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .tb-btn.stop { background: var(--red); color: #fff; border-color: var(--red); }
+  .tb-btn.warning { background: var(--amber); color: #000; border-color: var(--amber); }
+  .tb-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--bg3); color: var(--text3); margin-left: auto; }
+  .speed-wrap { display: flex; align-items: center; gap: 8px; margin-left: 6px; }
+  .speed-wrap label { font-size: 12px; color: var(--text3); }
+  .speed-wrap input[type=range] { width: 90px; accent-color: var(--blue); }
+  .speed-val { font-size: 12px; font-weight: 600; color: var(--blue); min-width: 14px; }
+
+  /* LAYOUT */
+  #workspace { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  #sidebar { width: var(--sidebar-w); background: var(--bg1); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .sidebar-section { padding: 8px 10px 4px; font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--text3); text-transform: uppercase; }
+  .comp-list { padding: 4px 8px; flex: 1; overflow-y: auto; }
+  .comp-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: grab; border: 1px solid transparent; margin-bottom: 3px; transition: all .12s; }
+  .comp-item:hover { background: var(--bg3); border-color: var(--border2); }
+  .comp-item:active { cursor: grabbing; opacity: 0.7; }
+  .comp-icon { font-size: 18px; width: 26px; text-align: center; }
+  .comp-name { font-size: 12px; font-weight: 500; color: var(--text); }
+  .comp-sub { font-size: 10px; color: var(--text3); }
+
+  /* CANVAS AREA */
+  #canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg0); }
+  #factory-canvas { display: block; }
+  .drop-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; opacity: 0.18; transition: opacity .3s; }
+  .drop-hint svg { width: 64px; height: 64px; }
+  .drop-hint p { margin-top: 10px; font-size: 14px; color: var(--text2); }
+  #canvas-wrap.has-items .drop-hint { opacity: 0; }
+  #canvas-wrap.drag-over { background: #1a2540; }
+
+  /* PROPERTIES */
+  #props { width: var(--props-w); background: var(--bg1); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  #props-header { padding: 10px 14px 8px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--text3); text-transform: uppercase; }
+  #props-content { flex: 1; overflow-y: auto; padding: 10px; }
+  .prop-group { margin-bottom: 14px; }
+  .prop-group-title { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .prop-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .prop-label { font-size: 12px; color: var(--text2); }
+  .prop-val { font-size: 12px; font-weight: 500; color: var(--text); }
+  .prop-input { background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text); font-size: 12px; width: 110px; }
+  .prop-input:focus { outline: none; border-color: var(--blue); }
+  .prop-select { background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text); font-size: 12px; width: 110px; }
+  .prop-toggle { width: 34px; height: 18px; background: var(--bg3); border-radius: 9px; cursor: pointer; position: relative; border: 1px solid var(--border); transition: background .2s; }
+  .prop-toggle.on { background: var(--green); border-color: var(--green); }
+  .prop-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .2s; }
+  .prop-toggle.on::after { left: 18px; }
+  .delete-btn { width: 100%; padding: 7px; background: var(--red2); color: var(--red3); border: 1px solid var(--red); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; margin-top: 8px; }
+  .delete-btn:hover { background: var(--red); color: #fff; }
+  .no-sel { text-align: center; color: var(--text3); padding: 24px 10px; font-size: 12px; }
+
+  /* STATUS BAR */
+  #statusbar { height: var(--status-h); background: var(--bg1); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 16px; padding: 0 14px; flex-shrink: 0; }
+  .sb-item { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 5px; }
+  .sb-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .sb-dot.green { background: var(--green); }
+  .sb-dot.red { background: var(--red); }
+  .sb-dot.amber { background: var(--amber); }
+
+  /* LOG */
+  #log-panel { height: 140px; background: var(--bg1); border-top: 1px solid var(--border); flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .log-header { padding: 4px 12px; font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--text3); text-transform: uppercase; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .log-clear { margin-left: auto; cursor: pointer; color: var(--text3); font-size: 10px; }
+  .log-clear:hover { color: var(--red); }
+  #log-body { flex: 1; overflow-y: auto; padding: 4px 12px; font-family: 'Consolas', monospace; font-size: 11px; }
+  .log-line { padding: 1.5px 0; color: var(--text2); }
+  .log-line.ok { color: var(--green); }
+  .log-line.warn { color: var(--amber); }
+  .log-line.err { color: var(--red); }
+  .log-line .ts { color: var(--text3); margin-right: 6px; }
+
+  /* CONTEXT MENU */
+  #ctx-menu { position: fixed; background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 4px; z-index: 9999; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; }
+  #ctx-menu.show { display: block; }
+  .ctx-item { padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; color: var(--text); }
+  .ctx-item:hover { background: var(--bg3); }
+  .ctx-item.danger { color: var(--red); }
+  .ctx-item.danger:hover { background: var(--red2); }
+  .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+</style>
+</head>
+<body>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <span class="tb-title">🏭 FactoryIO Sim</span>
+  <div class="tb-sep"></div>
+  <button class="tb-btn active" id="btnStart" onclick="toggleSim()">▶ Başlat</button>
+  <button class="tb-btn" id="btnFault" onclick="injectFault()">⚠ Arıza</button>
+  <button class="tb-btn" onclick="clearScene()">🗑 Temizle</button>
+  <button class="tb-btn" onclick="saveScene()">💾 Kaydet</button>
+  <div class="tb-sep"></div>
+  <div class="speed-wrap">
+    <label>Hız:</label>
+    <input type="range" min="1" max="8" value="3" id="speedSlider" oninput="setSpeed(this.value)">
+    <span class="speed-val" id="speedVal">3</span>
+  </div>
+  <div class="tb-sep"></div>
+  <span class="tb-badge" id="fpsLabel">60 FPS</span>
+  <span class="tb-badge" id="componentCount">0 komponent</span>
+</div>
+
+<!-- WORKSPACE -->
+<div id="workspace">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sidebar-section">Konveyörler</div>
+    <div class="comp-list">
+      <div class="comp-item" draggable="true" data-type="conveyor-h" onclick="addCompClick('conveyor-h')">
+        <span class="comp-icon">➡️</span>
+        <div><div class="comp-name">Yatay Konveyör</div><div class="comp-sub">Sol → Sağ</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="conveyor-v" onclick="addCompClick('conveyor-v')">
+        <span class="comp-icon">⬇️</span>
+        <div><div class="comp-name">Dikey Konveyör</div><div class="comp-sub">Yukarı → Aşağı</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="conveyor-turn" onclick="addCompClick('conveyor-turn')">
+        <span class="comp-icon">↩️</span>
+        <div><div class="comp-name">Dönüş Konveyörü</div><div class="comp-sub">90° viraj</div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Sensörler</div>
+    <div class="comp-list">
+      <div class="comp-item" draggable="true" data-type="sensor-prox" onclick="addCompClick('sensor-prox')">
+        <span class="comp-icon">📡</span>
+        <div><div class="comp-name">Proximity Sensör</div><div class="comp-sub">Varlık algılama</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="sensor-photo" onclick="addCompClick('sensor-photo')">
+        <span class="comp-icon">🔦</span>
+        <div><div class="comp-name">Fotoelektrik</div><div class="comp-sub">Işın kesmeli</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="sensor-color" onclick="addCompClick('sensor-color')">
+        <span class="comp-icon">🎨</span>
+        <div><div class="comp-name">Renk Sensörü</div><div class="comp-sub">RGB algılama</div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Aktüatörler</div>
+    <div class="comp-list">
+      <div class="comp-item" draggable="true" data-type="actuator-piston" onclick="addCompClick('actuator-piston')">
+        <span class="comp-icon">🔩</span>
+        <div><div class="comp-name">Piston / İtici</div><div class="comp-sub">Pnömatik</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="actuator-arm" onclick="addCompClick('actuator-arm')">
+        <span class="comp-icon">🦾</span>
+        <div><div class="comp-name">Robot Kol</div><div class="comp-sub">Pick & Place</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="actuator-stopper" onclick="addCompClick('actuator-stopper')">
+        <span class="comp-icon">🛑</span>
+        <div><div class="comp-name">Durdurma Kapağı</div><div class="comp-sub">Akış kontrolü</div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Diğer</div>
+    <div class="comp-list">
+      <div class="comp-item" draggable="true" data-type="source" onclick="addCompClick('source')">
+        <span class="comp-icon">📦</span>
+        <div><div class="comp-name">Ürün Kaynağı</div><div class="comp-sub">Ürün üretir</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="sink" onclick="addCompClick('sink')">
+        <span class="comp-icon">🏁</span>
+        <div><div class="comp-name">Çıkış Noktası</div><div class="comp-sub">Sayaç + teslim</div></div>
+      </div>
+      <div class="comp-item" draggable="true" data-type="display" onclick="addCompClick('display')">
+        <span class="comp-icon">📟</span>
+        <div><div class="comp-name">HMI Ekran</div><div class="comp-sub">Veri gösterimi</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div id="canvas-wrap">
+    <canvas id="factory-canvas"></canvas>
+    <div class="drop-hint">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="8" y="28" width="48" height="8" rx="4" fill="#3d4f6e"/>
+        <circle cx="16" cy="36" r="6" fill="#3d4f6e"/>
+        <circle cx="48" cy="36" r="6" fill="#3d4f6e"/>
+        <rect x="28" y="12" width="8" height="20" rx="2" fill="#3d4f6e"/>
+        <path d="M24 20l8-10 8 10" fill="#3d4f6e"/>
+      </svg>
+      <p>Soldan sürükle veya tıkla ekle</p>
+    </div>
+  </div>
+
+  <!-- PROPERTIES -->
+  <div id="props">
+    <div id="props-header">Özellikler</div>
+    <div id="props-content">
+      <div class="no-sel">Bir komponent seçin</div>
+    </div>
+  </div>
+</div>
+
+<!-- LOG -->
+<div id="log-panel">
+  <div class="log-header">
+    Olay Günlüğü
+    <span class="log-clear" onclick="clearLog()">Temizle</span>
+  </div>
+  <div id="log-body"></div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="statusbar">
+  <div class="sb-item"><span class="sb-dot green" id="sim-dot"></span><span id="sim-status">Duruyor</span></div>
+  <div class="sb-item">⏱ <span id="sb-time">0s</span></div>
+  <div class="sb-item">📦 Toplam: <span id="sb-total">0</span></div>
+  <div class="sb-item">✅ Başarılı: <span id="sb-ok">0</span></div>
+  <div class="sb-item">❌ Hatalı: <span id="sb-fault">0</span></div>
+  <div class="sb-item" style="margin-left:auto">OEE: <span id="sb-oee">—</span></div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+  <div class="ctx-item" onclick="ctxDuplicate()">📋 Kopyala</div>
+  <div class="ctx-item" onclick="ctxRotate()">🔄 90° Döndür</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxProps()">⚙ Özellikler</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" onclick="ctxDelete()">🗑 Sil</div>
+</div>
+
+<script src="sim.js"></script>
+</body>
+</html>
